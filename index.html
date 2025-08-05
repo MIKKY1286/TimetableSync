@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lecture Timetable Sync Tool | Never Miss a Class Again</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Poppins', sans-serif; }
+  </style>
+</head>
+<body class="bg-gray-50">
+  <!-- Navbar -->
+  <nav class="bg-white shadow-sm py-4">
+    <div class="container mx-auto px-6 flex justify-between items-center">
+      <div class="flex items-center space-x-2">
+        <i class="fas fa-calendar-alt text-blue-600 text-2xl"></i>
+        <span class="text-xl font-bold text-gray-800">TimetableSync</span>
+      </div>
+      <div class="hidden md:flex space-x-8">
+        <a href="#features" class="text-gray-600 hover:text-blue-600">Features</a>
+        <a href="#how-it-works" class="text-gray-600 hover:text-blue-600">How It Works</a>
+        <a href="#testimonials" class="text-gray-600 hover:text-blue-600">Testimonials</a>
+      </div>
+      <a 
+        href="./login/login.html" 
+        class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+      >
+        Get Started
+      </a>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="py-20 px-6">
+    <div class="container mx-auto flex flex-col md:flex-row items-center">
+      <div class="md:w-1/2 mb-10 md:mb-0">
+        <h1 class="text-4xl md:text-5xl font-bold text-gray-800 leading-tight mb-4">
+          Sync Your Lecture Timetable <br>
+          <span class="text-blue-600">Effortlessly</span>
+        </h1>
+        <p class="text-lg text-gray-600 mb-8">
+          Automatically update your calendar with real-time lecture changes. 
+          No more outdated schedules or missed classes!
+        </p>
+        <div class="flex space-x-4">
+          <a 
+            href="./login/login.html" 
+            class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition"
+          >
+            Try It Free
+          </a>
+          <a 
+            href="#how-it-works" 
+            class="border border-blue-600 text-blue-600 px-6 py-3 rounded-lg hover:bg-blue-50 transition"
+          >
+            How It Works →
+          </a>
+        </div>
+      </div>
+      <div class="md:w-1/2">
+        <img 
+          src="https://illustrations.popsy.co/amber/digital-nomad.svg" 
+          alt="Calendar sync illustration" 
+          class="w-full max-w-md mx-auto"
+        >
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Section -->
+  <section id="features" class="py-16 bg-white">
+    <div class="container mx-auto px-6">
+      <h2 class="text-3xl font-bold text-center text-gray-800 mb-12">
+        Why TimetableSync?
+      </h2>
+      <div class="grid md:grid-cols-3 gap-8">
+        <!-- Feature 1 -->
+        <div class="bg-gray-50 p-6 rounded-xl hover:shadow-md transition">
+          <div class="text-blue-600 text-3xl mb-4">
+            <i class="fas fa-sync-alt"></i>
+          </div>
+          <h3 class="text-xl font-semibold mb-2">Auto-Sync</h3>
+          <p class="text-gray-600">
+            Pulls data directly from your university’s system. Updates your calendar instantly when changes occur.
+          </p>
+        </div>
+        <!-- Feature 2 -->
+        <div class="bg-gray-50 p-6 rounded-xl hover:shadow-md transition">
+          <div class="text-blue-600 text-3xl mb-4">
+            <i class="fas fa-bell"></i>
+          </div>
+          <h3 class="text-xl font-semibold mb-2">Smart Alerts</h3>
+          <p class="text-gray-600">
+            Get notifications for room changes, cancellations, or new assignments.
+          </p>
+        </div>
+        <!-- Feature 3 -->
+        <div class="bg-gray-50 p-6 rounded-xl hover:shadow-md transition">
+          <div class="text-blue-600 text-3xl mb-4">
+            <i class="fas fa-calendar-check"></i>
+          </div>
+          <h3 class="text-xl font-semibold mb-2">Multi-Platform</h3>
+          <p class="text-gray-600">
+            Works with Google Calendar, Apple Calendar, Outlook, and more.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works -->
+  <section id="how-it-works" class="py-16 bg-gray-50">
+    <div class="container mx-auto px-6">
+      <h2 class="text-3xl font-bold text-center text-gray-800 mb-12">
+        How It Works
+      </h2>
+      <div class="flex flex-col md:flex-row items-center mb-12">
+        <div class="md:w-1/2 mb-8 md:mb-0">
+          <img 
+            src="https://illustrations.popsy.co/amber/designer.svg" 
+            alt="Connect university account" 
+            class="w-full max-w-xs mx-auto"
+          >
+        </div>
+        <div class="md:w-1/2 md:pl-12">
+          <div class="flex items-start mb-6">
+            <span class="bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center mr-4">1</span>
+            <div>
+              <h3 class="text-xl font-semibold mb-2">Connect Your University Account</h3>
+              <p class="text-gray-600">
+                Log in with your university credentials or upload your timetable.
+              </p>
+            </div>
+          </div>
+          <div class="flex items-start mb-6">
+            <span class="bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center mr-4">2</span>
+            <div>
+              <h3 class="text-xl font-semibold mb-2">Sync to Your Calendar</h3>
+              <p class="text-gray-600">
+                Link your preferred calendar (Google, Apple, etc.) with one click.
+              </p>
+            </div>
+          </div>
+          <div class="flex items-start">
+            <span class="bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center mr-4">3</span>
+            <div>
+              <h3 class="text-xl font-semibold mb-2">Stay Updated</h3>
+              <p class="text-gray-600">
+                Receive real-time updates when your timetable changes.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Section -->
+  <section class="py-16 bg-blue-600 text-white">
+    <div class="container mx-auto px-6 text-center">
+      <h2 class="text-3xl font-bold mb-6">Ready to Simplify Your Schedule?</h2>
+      <p class="text-xl mb-8 max-w-2xl mx-auto">
+        Join thousands of students who never miss a lecture again.
+      </p>
+      <a 
+        href="./login/login.html" 
+        class="bg-white text-blue-600 px-8 py-3 rounded-lg font-semibold hover:bg-gray-100 transition inline-block"
+      >
+        Get Started for Free
+      </a>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="bg-gray-800 text-white py-12">
+    <div class="container mx-auto px-6">
+      <div class="flex flex-col md:flex-row justify-between">
+        <div class="mb-8 md:mb-0">
+          <div class="flex items-center space-x-2 mb-4">
+            <i class="fas fa-calendar-alt text-blue-400 text-2xl"></i>
+            <span class="text-xl font-bold">TimetableSync</span>
+          </div>
+          <p class="text-gray-400 max-w-xs">
+            Automating your academic schedule since 2023.
+          </p>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-8">
+          <div>
+            <h3 class="font-semibold text-lg mb-4">Product</h3>
+            <ul class="space-y-2">
+              <li><a href="#features" class="text-gray-400 hover:text-white transition">Features</a></li>
+              <li><a href="#how-it-works" class="text-gray-400 hover:text-white transition">How It Works</a></li>
+              <li><a href="#" class="text-gray-400 hover:text-white transition">Pricing</a></li>
+            </ul>
+          </div>
+          <div>
+            <h3 class="font-semibold text-lg mb-4">Company</h3>
+            <ul class="space-y-2">
+              <li><a href="#" class="text-gray-400 hover:text-white transition">About</a></li>
+              <li><a href="#" class="text-gray-400 hover:text-white transition">Blog</a></li>
+              <li><a href="#" class="text-gray-400 hover:text-white transition">Contact</a></li>
+            </ul>
+          </div>
+          <div>
+            <h3 class="font-semibold text-lg mb-4">Legal</h3>
+            <ul class="space-y-2">
+              <li><a href="#" class="text-gray-400 hover:text-white transition">Privacy</a></li>
+              <li><a href="#" class="text-gray-400 hover:text-white transition">Terms</a></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="border-t border-gray-700 mt-12 pt-8 text-center text-gray-400">
+        <p>© 2023 TimetableSync. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- JS for animations -->
+  <script src="assets/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,106 @@
+🔄 Google Sheets Sync-Based Tool: Page List
+Home Page
+
+Simple overview of what the tool does
+
+“Connect Google Sheet” or “Upload CSV” button
+
+Quick visual example of timetable-to-calendar sync
+
+
+
+Connect Sheet Page
+
+Google sign-in (OAuth)
+
+Input Google Sheets URL or pick from Drive
+
+Map columns (e.g., course name, time, location)
+
+Set sync frequency (e.g., every hour, daily)
+
+Preview synced data
+
+
+
+Upload CSV Page
+
+Upload .csv version of timetable
+
+Map columns just like Sheets
+
+Optional: auto-detect timetable layout
+
+Preview & confirm sync
+
+
+
+Dashboard Page
+
+Shows current synced schedule
+
+Calendar view (week/day)
+
+Sync status (last updated, next update)
+
+Reconnect or update sheet link
+
+Manual sync button
+
+
+
+Customization Page
+
+Filter by subject, location, lecturer
+
+Set custom colors
+
+Toggle SMS/email/push notifications
+
+Time zone settings
+
+
+
+Notifications Page
+
+Choose notification type
+
+Customize rules (e.g., “only notify for time changes,” “remind me 10 minutes before”)
+
+
+
+Sync Logs Page
+
+Show recent syncs
+
+List of any failed updates and reasons
+
+Option to download logs or refresh manually
+
+Help / Troubleshooting
+
+Guide for setting up Sheets/CSV formats
+
+Permissions help (if Google Sheet is private)
+
+Contact support form
+
+
+
+Login/Signup Page
+
+Basic auth or Google Sign-in
+
+Required to connect calendars and Sheets
+
+
+
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCU2xz-keuLS6SSMNraYe7bC59iQu-Y4b4",
+  authDomain: "assignment-3-d46ca.firebaseapp.com",
+  projectId: "assignment-3-d46ca",
+  storageBucket: "assignment-3-d46ca.firebasestorage.app",
+  messagingSenderId: "840587574527",
+  appId: "1:840587574527:web:ecdaa3a39b7645dc42e0ca"
+};

@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard | TimetableSync</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <style>
+    body { font-family: 'Poppins', sans-serif; }
+    .calendar-day { min-height: 120px; }
+    .lecture-card { border-left: 4px solid; }
+    .sidebar { transition: transform 0.3s ease; }
+    .animate-spin { animation: spin 1s linear infinite; }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body class="bg-gray-50">
+  <!-- Sidebar + Main Content Container -->
+  <div class="flex h-screen">
+    <!-- Sidebar -->
+    <aside id="sidebar" class="sidebar w-64 bg-white shadow-sm md:block fixed md:relative inset-y-0 left-0 transform -translate-x-full md:translate-x-0 z-10">
+      <div class="p-4 flex items-center space-x-2 border-b">
+        <i class="fas fa-calendar-alt text-blue-600 text-2xl"></i>
+        <span class="text-xl font-bold">TimetableSync</span>
+      </div>
+      <nav class="p-4 space-y-2">
+        <a href="#" class="flex items-center space-x-3 p-2 bg-blue-50 text-blue-600 rounded-lg">
+          <i class="fas fa-calendar-day w-5"></i>
+          <span>Today's Schedule</span>
+        </a>
+        <a href="#" class="flex items-center space-x-3 p-2 text-gray-600 hover:bg-gray-100 rounded-lg">
+          <i class="fas fa-calendar-week w-5"></i>
+          <span>Weekly View</span>
+        </a>
+        <a href="#" class="flex items-center space-x-3 p-2 text-gray-600 hover:bg-gray-100 rounded-lg">
+          <i class="fas fa-bell w-5"></i>
+          <span>Notifications</span>
+        </a>
+        <a href="#" class="flex items-center space-x-3 p-2 text-gray-600 hover:bg-gray-100 rounded-lg">
+          <i class="fas fa-cog w-5"></i>
+          <span>Settings</span>
+        </a>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 overflow-auto">
+      <!-- Top Bar -->
+      <header class="bg-white shadow-sm p-4 flex justify-between items-center">
+        <div class="flex items-center space-x-4">
+          <button id="sidebar-toggle" class="md:hidden text-gray-600">
+            <i class="fas fa-bars text-xl"></i>
+          </button>
+          <h1 class="text-xl font-semibold">Today's Schedule</h1>
+        </div>
+        <div class="flex items-center space-x-4">
+          <button id="sync-btn" class="p-2 text-gray-600 hover:bg-gray-100 rounded-full">
+            <i class="fas fa-sync-alt"></i>
+          </button>
+          <div class="relative">
+            <img 
+              id="profile-img"
+              src="https://ui-avatars.com/api/?name=User&background=random" 
+              alt="Profile" 
+              class="w-8 h-8 rounded-full cursor-pointer"
+            >
+            <!-- Dropdown -->
+            <div id="profile-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-white shadow-lg rounded-lg py-1 z-10">
+              <a href="#" class="block px-4 py-2 text-gray-700 hover:bg-gray-100">Profile</a>
+              <a href="#" class="block px-4 py-2 text-gray-700 hover:bg-gray-100">Settings</a>
+              <a href="#" id="logout-btn" class="block px-4 py-2 text-gray-700 hover:bg-gray-100">Logout</a>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Dashboard Content -->
+      <div class="p-6">
+        <!-- Date Navigator -->
+        <div class="flex justify-between items-center mb-6">
+          <button id="prev-day" class="p-2 rounded-lg hover:bg-gray-100">
+            <i class="fas fa-chevron-left"></i>
+          </button>
+          <h2 id="current-date" class="text-xl font-semibold">Loading...</h2>
+          <button id="next-day" class="p-2 rounded-lg hover:bg-gray-100">
+            <i class="fas fa-chevron-right"></i>
+          </button>
+        </div>
+
+        <!-- Timetable View -->
+        <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+          <div class="grid grid-cols-7 gap-px bg-gray-200" id="timetable-grid">
+            <!-- Header Row -->
+            <div class="bg-gray-100 p-2 text-center font-medium">Time</div>
+            <div class="bg-gray-100 p-2 text-center font-medium">Mon</div>
+            <div class="bg-gray-100 p-2 text-center font-medium">Tue</div>
+            <div class="bg-gray-100 p-2 text-center font-medium">Wed</div>
+            <div class="bg-gray-100 p-2 text-center font-medium">Thu</div>
+            <div class="bg-gray-100 p-2 text-center font-medium">Fri</div>
+            <div class="bg-gray-100 p-2 text-center font-medium">Sat</div>
+            <!-- Time slots will be populated by JavaScript -->
+          </div>
+        </div>
+
+        <!-- Upcoming Lectures List -->
+        <div class="mt-8">
+          <h3 class="text-lg font-semibold mb-4 flex items-center">
+            <i class="fas fa-clock text-blue-600 mr-2"></i>
+            Upcoming Lectures (Next 24 Hours)
+          </h3>
+          <div class="space-y-3" id="upcoming-lectures">
+            <div class="text-center py-8 text-gray-500" id="loading-lectures">
+              <i class="fas fa-spinner fa-spin mr-2"></i> Loading lectures...
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Mobile Bottom Nav (for small screens) -->
+  <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white shadow-lg flex justify-around py-3">
+    <a href="#" class="text-blue-600 flex flex-col items-center">
+      <i class="fas fa-calendar-day"></i>
+      <span class="text-xs mt-1">Today</span>
+    </a>
+    <a href="#" class="text-gray-600 flex flex-col items-center">
+      <i class="fas fa-calendar-week"></i>
+      <span class="text-xs mt-1">Week</span>
+    </a>
+    <a href="#" class="text-gray-600 flex flex-col items-center">
+      <i class="fas fa-bell"></i>
+      <span class="text-xs mt-1">Alerts</span>
+    </a>
+    <a href="#" class="text-gray-600 flex flex-col items-center">
+      <i class="fas fa-cog"></i>
+      <span class="text-xs mt-1">Settings</span>
+    </a>
+  </nav>
+<script>
+  // ... [your existing Firebase config and variables] ...
+
+  function setupEventListeners() {
+    // Toggle Sidebar (Mobile)
+    sidebarToggle.addEventListener('click', () => {
+      sidebar.classList.toggle('-translate-x-full');
+    });
+
+    // Profile Dropdown Toggle
+    profileImg.addEventListener('click', e => {
+      e.stopPropagation();
+      profileDropdown.classList.toggle('hidden');
+    });
+    document.addEventListener('click', () => {
+      if (!profileDropdown.classList.contains('hidden')) {
+        profileDropdown.classList.add('hidden');
+      }
+    });
+
+    // Logout Button
+    logoutBtn.addEventListener('click', () => {
+      auth.signOut().then(() => {
+        window.location.href = `${window.location.origin}/index.html`;
+      }).catch(() => alert("Logout failed. Try again."));
+    });
+
+    // Sync Button
+    syncBtn.addEventListener('click', () => {
+      syncBtn.classList.add('animate-spin');
+      setTimeout(() => {
+        syncBtn.classList.remove('animate-spin');
+        if (auth.currentUser) loadTimetable(auth.currentUser.uid);
+      }, 1000);
+    });
+
+    // Date Navigation
+    prevDayBtn.addEventListener('click', () => {
+      currentDate.setDate(currentDate.getDate() - 1);
+      updateDateDisplay();
+      if (auth.currentUser) loadTimetable(auth.currentUser.uid); // Optional: re-render
+    });
+    nextDayBtn.addEventListener('click', () => {
+      currentDate.setDate(currentDate.getDate() + 1);
+      updateDateDisplay();
+      if (auth.currentUser) loadTimetable(auth.currentUser.uid);
+    });
+
+    // -----------------------------
+    // ✅ NEW: Sidebar & Bottom Nav Click Handlers
+    // -----------------------------
+
+    // Simulate navigation (you can change hrefs to real pages later)
+    const navLinks = document.querySelectorAll('a[href="#"]');
+    navLinks.forEach(link => {
+      if (!link.id) { // Avoid interfering with logout-btn
+        link.addEventListener('click', e => {
+          e.preventDefault();
+
+          // Remove active class from all
+          navLinks.forEach(l => {
+            const parent = l.parentElement?.tagName === 'NAV' ? l.parentElement : l;
+            parent.classList.remove('bg-blue-50', 'text-blue-600');
+            parent.classList.add('text-gray-600');
+          });
+          // Add active class to clicked
+          const parent = link.parentElement?.tagName === 'NAV' ? link.parentElement : link;
+          parent.classList.add('bg-blue-50', 'text-blue-600');
+          parent.classList.remove('text-gray-600');
+
+          // Optional: Update title
+          const title = link.textContent.trim();
+          if (title === 'Today\'s Schedule' || title === 'Weekly View') {
+            document.querySelector('main h1').textContent = title;
+          }
+
+          // Temporary message for demo
+          if (title === 'Settings') {
+            alert("Settings page coming soon!");
+          } else if (title === 'Notifications') {
+            alert("You have no new notifications.");
+          }
+        });
+      }
+    });
+
+    // ✅ Mobile Bottom Nav - Sync with Sidebar
+    const bottomNavItems = document.querySelectorAll('.md\\:hidden a');
+    bottomNavItems.forEach(item => {
+      item.addEventListener('click', e => {
+        e.preventDefault();
+        const text = item.querySelector('span')?.textContent;
+
+        // Highlight matching sidebar item
+        document.querySelectorAll('nav.p-4 a').forEach(link => {
+          if (link.textContent.includes(text)) {
+            // Simulate click
+            link.click();
+          }
+        });
+
+        // Visual feedback
+        bottomNavItems.forEach(i => i.classList.remove('text-blue-600'));
+        bottomNavItems.forEach(i => i.classList.add('text-gray-600'));
+        item.classList.remove('text-gray-600');
+        item.classList.add('text-blue-600');
+      });
+    });
+
+    // ✅ "Add Timetable" Button in Empty State
+    document.addEventListener('click', e => {
+      if (e.target.id === 'add-timetable') {
+        e.preventDefault();
+        alert("Redirecting to timetable editor...");
+        // Replace with real action:
+        // window.location.href = "edit-timetable.html";
+      }
+      if (e.target.id === 'retry-load') {
+        e.preventDefault();
+        if (auth.currentUser) {
+          loadTimetable(auth.currentUser.uid);
+        }
+      }
+    });
+  }
+
+  // ... [rest of your functions: initApp, renderEmptyState, etc.] ...
+</script>
+
+</body>
+</html>
