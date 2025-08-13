@@ -11,9 +11,15 @@
   <!-- Font Awesome -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
 
-  <!-- PDF.js and XLSX (parsing helpers) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.12.313/pdf.min.js"></script>
+  <!-- Firebase (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
+
+  <!-- File helpers -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.12.313/pdf.min.js"></script>
 
   <style>
     body { font-family: 'Poppins', sans-serif; }
@@ -51,20 +57,18 @@
       </div>
 
       <div>
-        <label class="block text-gray-700 mb-1">or paste JSON (lectures array)</label>
+        <label class="block text-gray-700 mb-1">or paste JSON</label>
         <textarea id="manualTimetable" class="w-full p-2 border rounded h-32" placeholder='{"lectures":[{"course":"MTH101","day":"Monday","time":"09:00","room":"LT1","color":"blue"}]}'></textarea>
       </div>
 
       <div class="flex items-center justify-between text-xs text-gray-500">
-        <div>Images will be stored in Firebase Storage and displayed as-is. Structured files will be parsed and saved to Firestore.</div>
+        <div>Upload image will be stored in Firebase Storage and displayed as-is.</div>
+        <div id="upload-hint"></div>
       </div>
 
-      <div class="flex gap-2">
-        <button id="uploadTimetable" class="flex-1 w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
-          Upload
-        </button>
-        <button id="clearInputs" class="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300">Clear</button>
-      </div>
+      <button id="uploadTimetable" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
+        Upload
+      </button>
     </div>
   </div>
 </div>
@@ -89,15 +93,6 @@
       <a href="#" data-page="settings" class="nav-link flex items-center space-x-3 p-2 text-gray-600 hover:bg-gray-100 rounded-lg">
         <i class="fas fa-cog w-5"></i><span>Settings</span>
       </a>
-
-      <div class="pt-4 border-t mt-4">
-        <button id="open-upload" class="w-full text-left py-2 px-2 rounded hover:bg-gray-100">
-          <i class="fas fa-upload mr-2 text-gray-600"></i> Upload Timetable
-        </button>
-        <button id="delete-timetable-sidebar" class="w-full text-left py-2 px-2 rounded hover:bg-red-50 text-red-600">
-          <i class="fas fa-trash mr-2"></i> Delete Timetable
-        </button>
-      </div>
     </nav>
   </aside>
 
@@ -149,44 +144,30 @@
   </a>
 </nav>
 
-<!-- Firebase modular SDK + app logic -->
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
-  import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
-  import { getFirestore, doc, getDoc, setDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
-  import { getStorage, ref as storageRefFn, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-storage.js";
+<script>
+  // PDF.js worker
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.12.313/pdf.worker.min.js';
 
-
-  // Assuming you have PDF.js loaded from a CDN
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
-
-
-  // ---------- CONFIG: replace these with your real keys ----------
+  // Firebase configuration (keep your keys)
   const firebaseConfig = {
     apiKey: "AIzaSyCU2xz-keuLS6SSMNraYe7bC59iQu-Y4b4",
     authDomain: "assignment-3-d46ca.firebaseapp.com",
     projectId: "assignment-3-d46ca",
-    storageBucket: "assignment-3-d46ca.appspot.com", // NOTE: use .appspot.com
+    storageBucket: "assignment-3-d46ca.firebasestorage.app",
     messagingSenderId: "840587574527",
     appId: "1:840587574527:web:ecdaa3a39b7645dc42e0ca"
   };
-  // ----------------------------------------------------------------
 
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const db = getFirestore(app);
-  const storage = getStorage(app);
+  // Initialize Firebase
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+  const storage = firebase.storage();
+
+  // Persist auth locally
+  auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(console.error);
 
   // DOM refs
-  const addTimetableModal = document.getElementById('addTimetableModal');
-  const closeModal = document.getElementById('closeModal');
-  const uploadTimetableBtn = document.getElementById('uploadTimetable');
-  const clearInputsBtn = document.getElementById('clearInputs');
-  const timetableFileInput = document.getElementById('timetableFile');
-  const manualTimetableInput = document.getElementById('manualTimetable');
-  const openUploadBtn = document.getElementById('open-upload');
-  const deleteSidebarBtn = document.getElementById('delete-timetable-sidebar');
-
   const sidebar = document.getElementById('sidebar');
   const sidebarToggle = document.getElementById('sidebar-toggle');
   const profileImg = document.getElementById('profile-img');
@@ -196,38 +177,80 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
   const pageTitle = document.getElementById('page-title');
   const pageContent = document.getElementById('page-content');
 
+  const addTimetableModal = document.getElementById('addTimetableModal');
+  const closeModal = document.getElementById('closeModal');
+  const uploadTimetableBtn = document.getElementById('uploadTimetable');
+  const timetableFileInput = document.getElementById('timetableFile');
+  const manualTimetableInput = document.getElementById('manualTimetable');
+
   // app state
   let currentDate = new Date();
-  let currentUser = null;
 
-  // helper utilities
-  function formatDateHuman(d){ return d.toLocaleDateString(undefined, { weekday:'long', month:'long', day:'numeric', year:'numeric' }); }
-  function getWeekRange(date){ const start = new Date(date); start.setDate(date.getDate() - date.getDay()); const end = new Date(start); end.setDate(start.getDate() + 6); return `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`; }
-  function getDayName(date){ return date.toLocaleDateString('en-US', { weekday:'long' }); }
-  function generateTimeSlots(){ const slots=[]; for(let h=8;h<=20;h++){ const hh=String(h).padStart(2,'0'); slots.push(`${hh}:00`); if(h<20) slots.push(`${hh}:30`); } return slots; }
-  function colorClass(c){ const map={blue:'border-l-blue-500',red:'border-l-red-500',green:'border-l-green-500',yellow:'border-l-yellow-500',purple:'border-l-purple-500',indigo:'border-l-indigo-500',pink:'border-l-pink-500',gray:'border-l-gray-500',slate:'border-l-slate-500'}; return map[(c||'').toLowerCase()] || 'border-l-gray-300'; }
-  function normalizeDayName(s){ if(!s) return ''; const v=String(s).toLowerCase(); const days=['sunday','monday','tuesday','wednesday','thursday','friday','saturday']; const hit=days.find(d => v.startsWith(d)); return hit ? hit.charAt(0).toUpperCase()+hit.slice(1) : String(s); }
+  // Utility helpers
+  function formatDateHuman(d){
+    return d.toLocaleDateString(undefined, { weekday:'long', month:'long', day:'numeric', year:'numeric' });
+  }
+  function getWeekRange(date){
+    const start = new Date(date);
+    start.setDate(date.getDate() - date.getDay());
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    return `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`;
+  }
+  function getDayName(date){
+    return date.toLocaleDateString('en-US', { weekday:'long' });
+  }
+  function generateTimeSlots(){
+    const slots = [];
+    for(let h=8; h<=20; h++){
+      const hh = String(h).padStart(2,'0');
+      slots.push(`${hh}:00`);
+      if(h<20) slots.push(`${hh}:30`);
+    }
+    return slots;
+  }
+  function colorClass(c){
+    const map = {
+      blue:'border-l-blue-500',
+      red:'border-l-red-500',
+      green:'border-l-green-500',
+      yellow:'border-l-yellow-500',
+      purple:'border-l-purple-500',
+      indigo:'border-l-indigo-500',
+      pink:'border-l-pink-500',
+      gray:'border-l-gray-500',
+      slate:'border-l-slate-500'
+    };
+    return map[(c||'').toLowerCase()] || 'border-l-gray-300';
+  }
+  function normalizeDayName(s){
+    if(!s) return '';
+    const v = String(s).toLowerCase();
+    const days = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+    const hit = days.find(d => v.startsWith(d));
+    return hit ? hit.charAt(0).toUpperCase() + hit.slice(1) : String(s);
+  }
 
-  // ---------- file processors (return {type:'structured', lectures:[...]}) ----------
+  // File processors (return { type: 'structured', lectures: [...] } or throw)
   async function processExcelFile(file){
     return new Promise((resolve,reject)=>{
-      const reader=new FileReader();
-      reader.onload = e => {
-        try {
+      const reader = new FileReader();
+      reader.onload = e=>{
+        try{
           const wb = XLSX.read(new Uint8Array(e.target.result), { type:'array' });
           const sheet = wb.Sheets[wb.SheetNames[0]];
           const rows = XLSX.utils.sheet_to_json(sheet);
-          const lectures = rows.map(r => {
+          const lectures = rows.map(r=>{
             const day = r['Day'] ?? r['day'];
             const time = r['Time'] ?? r['time'];
             const course = r['Course'] ?? r['Subject'] ?? r['course'] ?? r['subject'];
             const room = r['Room'] ?? r['Location'] ?? r['room'] ?? r['location'];
             const color = r['Color'] ?? r['color'];
             if(!day || !time || !course) return null;
-            return { course: String(course), day: normalizeDayName(day), time: String(time).trim(), ...(room?{room:String(room)}:{}), ...(color?{color:String(color).toLowerCase()}: {}) };
+            return { course, day: normalizeDayName(day), time: String(time).trim(), ...(room?{room}:{}) , ...(color?{color:String(color).toLowerCase()}:{}) };
           }).filter(Boolean);
           resolve({ type:'structured', lectures });
-        } catch(err){ reject(err); }
+        }catch(err){ reject(err); }
       };
       reader.onerror = reject;
       reader.readAsArrayBuffer(file);
@@ -237,16 +260,16 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
   async function processPDFFile(file){
     return new Promise((resolve,reject)=>{
       const reader = new FileReader();
-      reader.onload = async e => {
-        try {
-          const typed = new Uint8Array(e.target.result);
-          const pdf = await pdfjsLib.getDocument(typed).promise;
+      reader.onload = async e=>{
+        try{
+          const typedArray = new Uint8Array(e.target.result);
+          const pdf = await pdfjsLib.getDocument(typedArray).promise;
           let raw = '';
           const pages = Math.min(pdf.numPages, 3);
-          for(let p=1;p<=pages;p++){
+          for(let p=1; p<=pages; p++){
             const page = await pdf.getPage(p);
             const tc = await page.getTextContent();
-            raw += ' ' + tc.items.map(i=>i.str).join(' ');
+            raw += ' ' + tc.items.map(i => i.str).join(' ');
           }
           const tokens = raw.replace(/\s+/g,' ').trim().split(' ');
           const days = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
@@ -260,11 +283,11 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
               const course = tokens[i+2];
               if(!course) continue;
               const room = tokens[i+3] && !/^\d{1,2}:\d{2}$/.test(tokens[i+3]) ? tokens[i+3] : undefined;
-              lectures.push({ course: String(course), day, time, ...(room?{room:String(room)}:{}) });
+              lectures.push({ course, day, time, ...(room?{room}:{}) });
             }
           }
           resolve({ type:'structured', lectures });
-        } catch(err){ reject(err); }
+        }catch(err){ reject(err); }
       };
       reader.onerror = reject;
       reader.readAsArrayBuffer(file);
@@ -273,30 +296,29 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
 
   async function processCSVFile(file){
     return new Promise((resolve,reject)=>{
-      const reader=new FileReader();
-      reader.onload = e => {
-        try {
-          const raw = e.target.result;
-          const lines = raw.split('\n').map(l=>l.trim()).filter(Boolean);
-          if(!lines.length) return resolve({ type:'structured', lectures:[] });
-          const headers = lines[0].split(',').map(h=>h.trim().toLowerCase());
+      const reader = new FileReader();
+      reader.onload = e=>{
+        try{
+          const lines = e.target.result.split('\n').filter(line => line.trim().length);
+          if(lines.length===0) return resolve({ type:'structured', lectures: [] });
+          const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
           const rows = lines.slice(1).map(line=>{
             const vals = line.split(',');
             const obj = {};
             headers.forEach((h,idx)=> obj[h] = (vals[idx]||'').trim());
             return obj;
           });
-          const lectures = rows.map(r => {
+          const lectures = rows.map(r=>{
             const day = r['day'];
             const time = r['time'];
             const course = r['course'] || r['subject'] || r['class'];
             const room = r['room'] || r['location'];
             const color = r['color'];
             if(!day || !time || !course) return null;
-            return { course: String(course), day: normalizeDayName(day), time: String(time).trim(), ...(room?{room:String(room)}:{}), ...(color?{color:String(color).toLowerCase()}: {}) };
+            return { course, day: normalizeDayName(day), time: String(time).trim(), ...(room?{room}:{}) , ...(color?{color:String(color).toLowerCase()}:{}) };
           }).filter(Boolean);
           resolve({ type:'structured', lectures });
-        } catch(err){ reject(err); }
+        }catch(err){ reject(err); }
       };
       reader.onerror = reject;
       reader.readAsText(file);
@@ -306,22 +328,28 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
   async function processJSONFile(file){
     return new Promise((resolve,reject)=>{
       const reader = new FileReader();
-      reader.onload = e => {
-        try {
+      reader.onload = e=>{
+        try{
           const data = JSON.parse(e.target.result);
           let lectures = [];
           if(Array.isArray(data.lectures)) {
-            lectures = data.lectures.map(l => {
-              if(!l.day || !l.time || !l.course) return null;
-              return { course: String(l.course), day: normalizeDayName(l.day), time: String(l.time).trim(), ...(l.room?{room:String(l.room)}:{}), ...(l.color?{color:String(l.color).toLowerCase()}: {}) };
+            lectures = data.lectures.map(l=>{
+              if(!l.day||!l.time||!l.course) return null;
+              return { ...l, day: normalizeDayName(l.day), time: String(l.time).trim() };
             }).filter(Boolean);
           } else if(Array.isArray(data.timetable)) {
-            lectures = data.timetable.map(l => { if(!l.day||!l.time||!l.course) return null; return { course: String(l.course), day: normalizeDayName(l.day), time: String(l.time).trim() }; }).filter(Boolean);
+            lectures = data.timetable.map(l=>{
+              if(!l.day||!l.time||!l.course) return null;
+              return { ...l, day: normalizeDayName(l.day), time: String(l.time).trim() };
+            }).filter(Boolean);
           } else if(Array.isArray(data.TimeTable)) {
-            lectures = data.TimeTable.map(l => { if(!l.day||!l.time||!l.course) return null; return { course: String(l.course), day: normalizeDayName(l.day), time: String(l.time).trim() }; }).filter(Boolean);
+            lectures = data.TimeTable.map(l=>{
+              if(!l.day||!l.time||!l.course) return null;
+              return { ...l, day: normalizeDayName(l.day), time: String(l.time).trim() };
+            }).filter(Boolean);
           }
           resolve({ type:'structured', lectures });
-        } catch(err){ reject(err); }
+        }catch(err){ reject(err); }
       };
       reader.onerror = reject;
       reader.readAsText(file);
@@ -332,28 +360,27 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
     const data = JSON.parse(text);
     let lectures = [];
     if(Array.isArray(data.lectures)){
-      lectures = data.lectures.map(l => {
+      lectures = data.lectures.map(l=>{
         if(!l.day||!l.time||!l.course) return null;
-        return { course: String(l.course), day: normalizeDayName(l.day), time: String(l.time).trim(), ...(l.room?{room:String(l.room)}:{}), ...(l.color?{color:String(l.color).toLowerCase()}: {}) };
+        return { ...l, day: normalizeDayName(l.day), time: String(l.time).trim() };
       }).filter(Boolean);
     }
     return { type:'structured', lectures };
   }
 
-  // ---------- Firestore helpers ----------
+  // Firestore helpers
   async function getUserDoc(uid){
-    const d = await getDoc(doc(db, 'timetables', uid));
-    return d.exists() ? d.data() : null;
+    const doc = await db.collection('timetables').doc(uid).get();
+    return doc.exists ? doc.data() : null;
   }
   async function saveUserDoc(uid, payload){
-    // add updatedAt timestamp
-    return setDoc(doc(db, 'timetables', uid), { ...payload, updatedAt: serverTimestamp() });
+    return db.collection('timetables').doc(uid).set(payload);
   }
   async function removeUserDoc(uid){
-    return deleteDoc(doc(db, 'timetables', uid));
+    return db.collection('timetables').doc(uid).delete();
   }
 
-  // ---------- rendering helpers ----------
+  // Rendering helpers
   function renderLecturesList(container, lectures, dayName){
     const todays = lectures.filter(l => (l.day||'').toLowerCase() === dayName.toLowerCase());
     if(!todays.length){
@@ -381,7 +408,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
     `;
   }
 
-  // ---------- pages ----------
+  // TODAY
   async function loadToday(uid){
     pageContent.innerHTML = `
       <div class="flex justify-between items-center mb-6">
@@ -409,7 +436,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
     const timetableEl = document.getElementById('timetable');
     const upcomingEl = document.getElementById('upcoming-lectures');
 
-    try {
+    try{
       const data = await getUserDoc(uid);
 
       if(!data){
@@ -423,12 +450,13 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
         document.getElementById('open-add-modal-today')?.addEventListener('click', () => addTimetableModal.classList.add('active'));
         upcomingEl.innerHTML = `<div class="text-center py-4 text-gray-500">No data</div>`;
       } else if(data.type === 'image' && data.url){
+        // Show image timetable
         timetableEl.innerHTML = `
           <div class="p-4">
             <div class="rounded-lg overflow-hidden border">
               <img src="${data.url}" alt="Uploaded Timetable" class="w-full">
             </div>
-            <p class="text-xs text-gray-500 mt-2">Image timetable (uploaded)</p>
+            <p class="text-xs text-gray-500 mt-2">Image uploaded timetable</p>
           </div>
         `;
         upcomingEl.innerHTML = `<div class="text-center py-4 text-gray-500">Upcoming list unavailable for image-only timetable</div>`;
@@ -436,9 +464,9 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
         const dayName = currentDate.toLocaleDateString('en-US', { weekday: 'long' });
         renderLecturesList(timetableEl, data.lectures, dayName);
 
-        // upcoming in next 24h from structured data only
+        // Upcoming next 24h
         const now = new Date();
-        const end = new Date(now.getTime() + 24*60*60*1000);
+        const end = new Date(now.getTime() + 24 * 60 * 60 * 1000);
         const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
         const sow = new Date(currentDate); sow.setDate(currentDate.getDate() - currentDate.getDay());
 
@@ -459,7 +487,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
           upcomingEl.innerHTML = `<div class="text-center py-4 text-gray-500">No upcoming lectures in the next 24 hours</div>`;
         } else {
           const nowMs = Date.now();
-          upcomingEl.innerHTML = upcoming.map(lec => {
+          upcomingEl.innerHTML = upcoming.map(lec=>{
             const parts = String(lec.time).split(':');
             const hh = parseInt(parts[0],10), mm = parseInt(parts[1]||'0',10);
             const dayIdx = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
@@ -488,11 +516,11 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
         upcomingEl.innerHTML = `<div class="text-center py-4 text-gray-500">No data</div>`;
       }
 
-      // date nav wiring
+      // date nav
       document.getElementById('prev-day').addEventListener('click', () => { currentDate.setDate(currentDate.getDate()-1); renderPage('today', uid); });
       document.getElementById('next-day').addEventListener('click', () => { currentDate.setDate(currentDate.getDate()+1); renderPage('today', uid); });
 
-    } catch(err) {
+    }catch(err){
       console.error(err);
       timetableEl.innerHTML = `
         <div class="p-4 text-center text-red-500">
@@ -504,6 +532,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
     }
   }
 
+  // WEEK
   async function loadWeek(uid){
     pageContent.innerHTML = `
       <div class="flex justify-between items-center mb-6">
@@ -519,7 +548,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
 
     const weeklyEl = document.getElementById('weekly-timetable');
 
-    try {
+    try{
       const data = await getUserDoc(uid);
       if(!data){
         weeklyEl.innerHTML = `
@@ -539,7 +568,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
             <div class="rounded-lg overflow-hidden border">
               <img src="${data.url}" alt="Uploaded Timetable" class="w-full">
             </div>
-            <p class="text-xs text-gray-500 mt-2">Image timetable</p>
+            <p class="text-xs text-gray-500 mt-2">Image uploaded timetable</p>
           </div>
         `;
         document.getElementById('prev-week').addEventListener('click', () => { currentDate.setDate(currentDate.getDate()-7); renderPage('week', uid); });
@@ -594,7 +623,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
       document.getElementById('prev-week').addEventListener('click', () => { currentDate.setDate(currentDate.getDate()-7); renderPage('week', uid); });
       document.getElementById('next-week').addEventListener('click', () => { currentDate.setDate(currentDate.getDate()+7); renderPage('week', uid); });
 
-    } catch(err){
+    }catch(err){
       console.error(err);
       weeklyEl.innerHTML = `
         <div class="p-4 text-center text-red-500">
@@ -606,6 +635,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
     }
   }
 
+  // Notifications
   function loadNotifications(){
     pageContent.innerHTML = `
       <div class="bg-white rounded-lg shadow-sm p-6">
@@ -615,6 +645,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
     `;
   }
 
+  // Settings
   async function loadSettings(uid){
     pageContent.innerHTML = `
       <div class="bg-white rounded-lg shadow-sm p-6 space-y-6">
@@ -633,7 +664,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
       </div>
     `;
 
-    try {
+    try{
       const data = await getUserDoc(uid);
       const statusEl = document.getElementById('timetable-status');
       if(!data){
@@ -646,23 +677,18 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
       } else {
         statusEl.innerHTML = `<p class="text-amber-600"><i class="fas fa-circle-exclamation mr-2"></i>Unknown format</p>`;
       }
-    } catch(e){
+    }catch(e){
       document.getElementById('timetable-status').innerHTML = `<p class="text-red-600"><i class="fas fa-exclamation-triangle mr-2"></i>Error reading timetable</p>`;
     }
 
-    document.getElementById('open-add-modal-settings')?.addEventListener('click', () => addTimetableModal.classList.add('active'));
-    document.getElementById('remove-timetable')?.addEventListener('click', async () => {
+    document.getElementById('open-add-modal-settings').addEventListener('click', () => addTimetableModal.classList.add('active'));
+    document.getElementById('remove-timetable').addEventListener('click', async () => {
       if(!confirm('Remove timetable for this account?')) return;
       try{
-        // if previous payload had storagePath, delete storage object
-        const prev = await getUserDoc(uid);
-        if(prev && prev.type === 'image' && prev.storagePath){
-          try { await deleteObject(storageRefFn(storage, prev.storagePath)); } catch(e){ console.warn('failed to remove storage object', e); }
-        }
         await removeUserDoc(uid);
         alert('Timetable removed');
         renderPage('settings', uid);
-      } catch(err){
+      }catch(err){
         console.error(err);
         alert('Failed to remove timetable');
       }
@@ -673,8 +699,16 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
   function renderPage(page, uid){
     const titles = { today:"Today's Schedule", week:"Weekly View", notifications:"Notifications", settings:"Settings" };
     pageTitle.textContent = titles[page] || '';
-    document.querySelectorAll('.nav-link').forEach(link => { link.classList.remove('bg-blue-50','text-blue-600'); if(link.dataset.page === page) link.classList.add('bg-blue-50','text-blue-600'); });
-    document.querySelectorAll('.bottom-nav').forEach(nav => { nav.classList.remove('text-blue-600'); if(nav.dataset.page === page) nav.classList.add('text-blue-600'); });
+
+    // highlight nav
+    document.querySelectorAll('.nav-link').forEach(link => {
+      link.classList.remove('bg-blue-50','text-blue-600');
+      if(link.dataset.page === page) link.classList.add('bg-blue-50','text-blue-600');
+    });
+    document.querySelectorAll('.bottom-nav').forEach(nav => {
+      nav.classList.remove('text-blue-600');
+      if(nav.dataset.page === page) nav.classList.add('text-blue-600');
+    });
 
     if(page === 'today') loadToday(uid);
     else if(page === 'week') loadWeek(uid);
@@ -683,15 +717,29 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
   }
 
   function setupNavigation(uid){
-    document.querySelectorAll('.nav-link').forEach(link=>{ link.addEventListener('click', e=>{ e.preventDefault(); renderPage(link.dataset.page, uid); }); });
-    document.querySelectorAll('.bottom-nav').forEach(nav=>{ nav.addEventListener('click', e=>{ e.preventDefault(); renderPage(nav.dataset.page, uid); }); });
-    document.querySelectorAll('.dropdown-link').forEach(a=>{ a.addEventListener('click', e=>{ e.preventDefault(); renderPage(a.dataset.page, uid); profileDropdown.classList.add('hidden'); }); });
+    document.querySelectorAll('.nav-link').forEach(link=>{
+      link.addEventListener('click', e=>{
+        e.preventDefault();
+        renderPage(link.dataset.page, uid);
+      });
+    });
+    document.querySelectorAll('.bottom-nav').forEach(nav=>{
+      nav.addEventListener('click', e=>{
+        e.preventDefault();
+        renderPage(nav.dataset.page, uid);
+      });
+    });
+    document.querySelectorAll('.dropdown-link').forEach(a=>{
+      a.addEventListener('click', e=>{
+        e.preventDefault();
+        renderPage(a.dataset.page, uid);
+        profileDropdown.classList.add('hidden');
+      });
+    });
   }
 
-  // ---------- UI wiring and upload logic ----------
+  // UI wiring
   function setupUI(user){
-    currentUser = user;
-
     // avatar
     if(user.photoURL) profileImg.src = user.photoURL;
     else {
@@ -704,74 +752,63 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
 
     // profile dropdown
     profileImg.addEventListener('click', e => { e.stopPropagation(); profileDropdown.classList.toggle('hidden'); });
-    document.addEventListener('click', e => { if(!profileDropdown.contains(e.target) && e.target !== profileImg) profileDropdown.classList.add('hidden'); });
+    document.addEventListener('click', e => {
+      if(!profileDropdown.contains(e.target) && e.target !== profileImg) profileDropdown.classList.add('hidden');
+    });
 
-    // logout (redirect)
+    // logout
     logoutBtn.addEventListener('click', () => {
-      auth.signOut().then(()=> window.location.href = '/index.html').catch(err => { console.error('Logout error', err); alert('Logout failed'); });
+      auth.signOut().then(()=> window.location.href = '/index.html').catch(err => { console.error('Logout error:',err); alert('Logout failed, try again.'); });
     });
 
     // sync
     syncBtn.addEventListener('click', () => {
       syncBtn.classList.add('animate-spin');
-      setTimeout(()=> { syncBtn.classList.remove('animate-spin'); if(currentUser) renderPage('today', currentUser.uid); }, 600);
+      setTimeout(()=> {
+        syncBtn.classList.remove('animate-spin');
+        if(auth.currentUser) renderPage('today', auth.currentUser.uid);
+      }, 600);
     });
 
-    // modal open/close
-    openUploadBtn.addEventListener('click', () => addTimetableModal.classList.add('active'));
+    // modal controls
     closeModal.addEventListener('click', () => addTimetableModal.classList.remove('active'));
     addTimetableModal.addEventListener('click', e => { if(e.target === addTimetableModal) addTimetableModal.classList.remove('active'); });
 
-    clearInputsBtn.addEventListener('click', ()=> { timetableFileInput.value = ''; manualTimetableInput.value = ''; });
-
-    // sidebar delete
-    deleteSidebarBtn.addEventListener('click', () => deleteTimetable());
-
-    // upload logic
+    // upload handler
     uploadTimetableBtn.addEventListener('click', async () => {
       const file = timetableFileInput.files[0];
       const manual = manualTimetableInput.value.trim();
+
       uploadTimetableBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Uploading...';
       uploadTimetableBtn.disabled = true;
 
-      try {
-        if(!currentUser) throw new Error('Not authenticated');
-
-        const uid = currentUser.uid;
-        const prev = await getUserDoc(uid);
-
+      try{
         let payload = null;
 
         if(file){
-          const ext = (file.name.split('.').pop() || '').toLowerCase();
+          const ext = file.name.split('.').pop().toLowerCase();
 
-          // images
+          // Image upload to Storage -> store public URL in Firestore
           if(['jpg','jpeg','png'].includes(ext)){
-            // upload new image
-            const path = `timetables/${uid}/${Date.now()}_${file.name}`;
-            const ref = storageRefFn(storage, path);
-            await uploadBytes(ref, file);
-            const url = await getDownloadURL(ref);
-            payload = { type:'image', url, storagePath: ref.fullPath, uploadedAt: serverTimestamp() };
-
-            // delete previous storage object if present and different
-            if(prev && prev.type === 'image' && prev.storagePath && prev.storagePath !== ref.fullPath){
-              try { await deleteObject(storageRefFn(storage, prev.storagePath)); } catch(e){ console.warn('failed deleting previous storage object', e); }
-            }
+            const path = `timetables/${user.uid}/${Date.now()}_${file.name}`;
+            const ref = storage.ref(path);
+            await ref.put(file);
+            const url = await ref.getDownloadURL();
+            payload = { type:'image', url, uploadedAt: firebase.firestore.FieldValue.serverTimestamp() };
           }
-          // excel
+          // Excel
           else if(ext === 'xlsx' || ext === 'xls'){
             payload = await processExcelFile(file);
           }
-          // pdf
+          // PDF
           else if(ext === 'pdf'){
             payload = await processPDFFile(file);
           }
-          // csv
+          // CSV
           else if(ext === 'csv'){
             payload = await processCSVFile(file);
           }
-          // json
+          // JSON
           else if(ext === 'json'){
             payload = await processJSONFile(file);
           } else {
@@ -783,71 +820,49 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
           throw new Error('Choose a file or paste JSON');
         }
 
-        // Validate structured payload
-        if(payload && payload.type === 'structured' && !Array.isArray(payload.lectures)){
+        // Validate payload shape for structured
+        if(payload && payload.type === 'structured' && !Array.isArray(payload.lectures)) {
           throw new Error('Parsed structured timetable missing lectures array');
         }
 
-        // If switching from image -> structured, delete previous storage object
-        if(prev && prev.type === 'image' && prev.storagePath && payload && payload.type !== 'image'){
-          try { await deleteObject(storageRefFn(storage, prev.storagePath)); } catch(e){ console.warn('failed deleting previous storage object', e); }
-        }
+        // Save exactly what we derived
+        await saveUserDoc(user.uid, payload);
 
-        await saveUserDoc(uid, payload);
-
-        // cleanup UI
+        // cleanup
         timetableFileInput.value = '';
         manualTimetableInput.value = '';
         addTimetableModal.classList.remove('active');
         alert('Uploaded');
-        renderPage('today', uid);
-      } catch(err) {
+        renderPage('today', user.uid);
+
+      }catch(err){
         console.error('Upload error:', err);
         alert('Failed to upload: ' + (err.message || err));
-      } finally {
+      }finally{
         uploadTimetableBtn.innerHTML = 'Upload';
         uploadTimetableBtn.disabled = false;
       }
     });
   }
 
-  // delete timetable (public sidebar button)
-  async function deleteTimetable(){
-    if(!currentUser) { alert('Not signed in'); return; }
-    if(!confirm('Delete timetable for this account? This cannot be undone.')) return;
-    try {
-      const uid = currentUser.uid;
-      const prev = await getUserDoc(uid);
-      if(prev && prev.type === 'image' && prev.storagePath){
-        try { await deleteObject(storageRefFn(storage, prev.storagePath)); } catch(e){ console.warn('failed to remove storage object', e); }
+  // App init
+  document.addEventListener('DOMContentLoaded', () => {
+    auth.onAuthStateChanged(user => {
+      if(user){
+        setupUI(user);
+        setupNavigation(user.uid);
+        renderPage('today', user.uid);
+      } else {
+        // if you want anonymous access during development, you can sign in anonymously here
+        // auth.signInAnonymously().catch(console.error);
+        // but default behavior: redirect to login
+        window.location.href = '/login.html';
       }
-      await removeUserDoc(uid);
-      alert('Timetable deleted');
-      renderPage('today', uid);
-    } catch(e){
-      console.error(e);
-      alert('Failed to delete timetable');
-    }
-  }
-
-  // ---------- auth + init ----------
-  function bindGlobalNavigation(uid){
-    setupNavigation(uid);
-  }
-
-  onAuthStateChanged(auth, user => {
-    if(user){
-      setupUI(user);
-      bindGlobalNavigation(user.uid);
-      renderPage('today', user.uid);
-    } else {
-      // If you want to allow local dev without auth, uncomment anonymous sign-in:
-      // import("https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js").then(({getAuth, signInAnonymously}) => signInAnonymously(getAuth()));
-      // For production redirect to login
-      window.location.href = '/login.html';
-    }
+    }, err => {
+      console.error('Auth state error:', err);
+      window.location.href = '/index.html';
+    });
   });
-
 </script>
 </body>
 </html>

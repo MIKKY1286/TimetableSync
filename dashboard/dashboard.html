@@ -1,280 +1,853 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Dashboard | TimetableSync</title>
-  <!-- Tailwind CSS -->
+
+  <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
+
   <!-- Font Awesome -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <!-- Firebase SDK -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+
+  <!-- PDF.js and XLSX (parsing helpers) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.12.313/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
   <style>
     body { font-family: 'Poppins', sans-serif; }
-    .calendar-day { min-height: 120px; }
-    .lecture-card { border-left: 4px solid; }
-    .sidebar { transition: transform 0.3s ease; }
+    .sidebar { transition: transform .3s ease; }
     .animate-spin { animation: spin 1s linear infinite; }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
+    @keyframes spin { 0%{transform:rotate(0)}100%{transform:rotate(360deg)} }
+    .lecture-card { border-left: 4px solid; }
+    .modal { display: none; }
+    .modal.active { display: flex; }
+    .soon-lecture { animation: pulse 2s infinite; }
+    @keyframes pulse { 0%{opacity:1}50%{opacity:.7}100%{opacity:1} }
+    .time-slot { height: 60px; }
+    .compact-lecture { max-height: 50px; overflow: hidden; }
+    .sticky-time { position: sticky; left: 0; z-index: 10; }
   </style>
 </head>
 <body class="bg-gray-50">
-  <!-- Sidebar + Main Content Container -->
-  <div class="flex h-screen">
-    <!-- Sidebar -->
-    <aside id="sidebar" class="sidebar w-64 bg-white shadow-sm md:block fixed md:relative inset-y-0 left-0 transform -translate-x-full md:translate-x-0 z-10">
-      <div class="p-4 flex items-center space-x-2 border-b">
-        <i class="fas fa-calendar-alt text-blue-600 text-2xl"></i>
-        <span class="text-xl font-bold">TimetableSync</span>
+
+<!-- Add/Replace Timetable Modal -->
+<div id="addTimetableModal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+  <div class="bg-white rounded-lg p-6 w-full max-w-md">
+    <div class="flex justify-between items-center mb-4">
+      <h3 class="text-xl font-semibold">Add or Replace Timetable</h3>
+      <button id="closeModal" class="text-gray-500 hover:text-gray-700">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <div class="space-y-4">
+      <div>
+        <label class="block text-gray-700 mb-1">
+          Select file (PDF, Excel, CSV, JSON, JPG, PNG)
+        </label>
+        <input id="timetableFile" type="file" accept=".pdf,.xlsx,.xls,.csv,.json,.jpg,.jpeg,.png" class="w-full p-2 border rounded">
       </div>
-      <nav class="p-4 space-y-2">
-        <a href="#" class="flex items-center space-x-3 p-2 bg-blue-50 text-blue-600 rounded-lg">
-          <i class="fas fa-calendar-day w-5"></i>
-          <span>Today's Schedule</span>
-        </a>
-        <a href="#" class="flex items-center space-x-3 p-2 text-gray-600 hover:bg-gray-100 rounded-lg">
-          <i class="fas fa-calendar-week w-5"></i>
-          <span>Weekly View</span>
-        </a>
-        <a href="#" class="flex items-center space-x-3 p-2 text-gray-600 hover:bg-gray-100 rounded-lg">
-          <i class="fas fa-bell w-5"></i>
-          <span>Notifications</span>
-        </a>
-        <a href="#" class="flex items-center space-x-3 p-2 text-gray-600 hover:bg-gray-100 rounded-lg">
-          <i class="fas fa-cog w-5"></i>
-          <span>Settings</span>
-        </a>
-      </nav>
-    </aside>
 
-    <!-- Main Content -->
-    <main class="flex-1 overflow-auto">
-      <!-- Top Bar -->
-      <header class="bg-white shadow-sm p-4 flex justify-between items-center">
-        <div class="flex items-center space-x-4">
-          <button id="sidebar-toggle" class="md:hidden text-gray-600">
-            <i class="fas fa-bars text-xl"></i>
-          </button>
-          <h1 class="text-xl font-semibold">Today's Schedule</h1>
-        </div>
-        <div class="flex items-center space-x-4">
-          <button id="sync-btn" class="p-2 text-gray-600 hover:bg-gray-100 rounded-full">
-            <i class="fas fa-sync-alt"></i>
-          </button>
-          <div class="relative">
-            <img 
-              id="profile-img"
-              src="https://ui-avatars.com/api/?name=User&background=random" 
-              alt="Profile" 
-              class="w-8 h-8 rounded-full cursor-pointer"
-            >
-            <!-- Dropdown -->
-            <div id="profile-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-white shadow-lg rounded-lg py-1 z-10">
-              <a href="#" class="block px-4 py-2 text-gray-700 hover:bg-gray-100">Profile</a>
-              <a href="#" class="block px-4 py-2 text-gray-700 hover:bg-gray-100">Settings</a>
-              <a href="#" id="logout-btn" class="block px-4 py-2 text-gray-700 hover:bg-gray-100">Logout</a>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <!-- Dashboard Content -->
-      <div class="p-6">
-        <!-- Date Navigator -->
-        <div class="flex justify-between items-center mb-6">
-          <button id="prev-day" class="p-2 rounded-lg hover:bg-gray-100">
-            <i class="fas fa-chevron-left"></i>
-          </button>
-          <h2 id="current-date" class="text-xl font-semibold">Loading...</h2>
-          <button id="next-day" class="p-2 rounded-lg hover:bg-gray-100">
-            <i class="fas fa-chevron-right"></i>
-          </button>
-        </div>
-
-        <!-- Timetable View -->
-        <div class="bg-white rounded-lg shadow-sm overflow-hidden">
-          <div class="grid grid-cols-7 gap-px bg-gray-200" id="timetable-grid">
-            <!-- Header Row -->
-            <div class="bg-gray-100 p-2 text-center font-medium">Time</div>
-            <div class="bg-gray-100 p-2 text-center font-medium">Mon</div>
-            <div class="bg-gray-100 p-2 text-center font-medium">Tue</div>
-            <div class="bg-gray-100 p-2 text-center font-medium">Wed</div>
-            <div class="bg-gray-100 p-2 text-center font-medium">Thu</div>
-            <div class="bg-gray-100 p-2 text-center font-medium">Fri</div>
-            <div class="bg-gray-100 p-2 text-center font-medium">Sat</div>
-            <!-- Time slots will be populated by JavaScript -->
-          </div>
-        </div>
-
-        <!-- Upcoming Lectures List -->
-        <div class="mt-8">
-          <h3 class="text-lg font-semibold mb-4 flex items-center">
-            <i class="fas fa-clock text-blue-600 mr-2"></i>
-            Upcoming Lectures (Next 24 Hours)
-          </h3>
-          <div class="space-y-3" id="upcoming-lectures">
-            <div class="text-center py-8 text-gray-500" id="loading-lectures">
-              <i class="fas fa-spinner fa-spin mr-2"></i> Loading lectures...
-            </div>
-          </div>
-        </div>
+      <div>
+        <label class="block text-gray-700 mb-1">or paste JSON (lectures array)</label>
+        <textarea id="manualTimetable" class="w-full p-2 border rounded h-32" placeholder='{"lectures":[{"course":"MTH101","day":"Monday","time":"09:00","room":"LT1","color":"blue"}]}'></textarea>
       </div>
-    </main>
+
+      <div class="flex items-center justify-between text-xs text-gray-500">
+        <div>Images will be stored in Firebase Storage and displayed as-is. Structured files will be parsed and saved to Firestore.</div>
+      </div>
+
+      <div class="flex gap-2">
+        <button id="uploadTimetable" class="flex-1 w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
+          Upload
+        </button>
+        <button id="clearInputs" class="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300">Clear</button>
+      </div>
+    </div>
   </div>
+</div>
 
-  <!-- Mobile Bottom Nav (for small screens) -->
-  <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white shadow-lg flex justify-around py-3">
-    <a href="#" class="text-blue-600 flex flex-col items-center">
-      <i class="fas fa-calendar-day"></i>
-      <span class="text-xs mt-1">Today</span>
-    </a>
-    <a href="#" class="text-gray-600 flex flex-col items-center">
-      <i class="fas fa-calendar-week"></i>
-      <span class="text-xs mt-1">Week</span>
-    </a>
-    <a href="#" class="text-gray-600 flex flex-col items-center">
-      <i class="fas fa-bell"></i>
-      <span class="text-xs mt-1">Alerts</span>
-    </a>
-    <a href="#" class="text-gray-600 flex flex-col items-center">
-      <i class="fas fa-cog"></i>
-      <span class="text-xs mt-1">Settings</span>
-    </a>
-  </nav>
-<script>
-  // ... [your existing Firebase config and variables] ...
+<div class="flex h-screen">
+  <!-- Sidebar -->
+  <aside id="sidebar" class="sidebar w-64 bg-white shadow-sm md:block fixed md:relative inset-y-0 left-0 transform -translate-x-full md:translate-x-0 z-10">
+    <div class="p-4 flex items-center space-x-2 border-b">
+      <i class="fas fa-calendar-alt text-blue-600 text-2xl"></i>
+      <span class="text-xl font-bold">TimetableSync</span>
+    </div>
+    <nav class="p-4 space-y-2">
+      <a href="#" data-page="today" class="nav-link flex items-center space-x-3 p-2 bg-blue-50 text-blue-600 rounded-lg">
+        <i class="fas fa-calendar-day w-5"></i><span>Today's Schedule</span>
+      </a>
+      <a href="#" data-page="week" class="nav-link flex items-center space-x-3 p-2 text-gray-600 hover:bg-gray-100 rounded-lg">
+        <i class="fas fa-calendar-week w-5"></i><span>Weekly View</span>
+      </a>
+      <a href="#" data-page="notifications" class="nav-link flex items-center space-x-3 p-2 text-gray-600 hover:bg-gray-100 rounded-lg">
+        <i class="fas fa-bell w-5"></i><span>Notifications</span>
+      </a>
+      <a href="#" data-page="settings" class="nav-link flex items-center space-x-3 p-2 text-gray-600 hover:bg-gray-100 rounded-lg">
+        <i class="fas fa-cog w-5"></i><span>Settings</span>
+      </a>
 
-  function setupEventListeners() {
-    // Toggle Sidebar (Mobile)
-    sidebarToggle.addEventListener('click', () => {
-      sidebar.classList.toggle('-translate-x-full');
+      <div class="pt-4 border-t mt-4">
+        <button id="open-upload" class="w-full text-left py-2 px-2 rounded hover:bg-gray-100">
+          <i class="fas fa-upload mr-2 text-gray-600"></i> Upload Timetable
+        </button>
+        <button id="delete-timetable-sidebar" class="w-full text-left py-2 px-2 rounded hover:bg-red-50 text-red-600">
+          <i class="fas fa-trash mr-2"></i> Delete Timetable
+        </button>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="flex-1 overflow-auto">
+    <header class="bg-white shadow-sm p-4 flex justify-between items-center">
+      <div class="flex items-center space-x-4">
+        <button id="sidebar-toggle" class="md:hidden text-gray-600"><i class="fas fa-bars text-xl"></i></button>
+        <h1 id="page-title" class="text-xl font-semibold">Today's Schedule</h1>
+      </div>
+
+      <div class="flex items-center space-x-4">
+        <button id="sync-btn" class="p-2 text-gray-600 hover:bg-gray-100 rounded-full" title="Refresh">
+          <i class="fas fa-sync-alt"></i>
+        </button>
+
+        <div class="relative">
+          <img id="profile-img" src="https://ui-avatars.com/api/?name=User&background=random" class="w-8 h-8 rounded-full cursor-pointer" alt="Profile">
+          <div id="profile-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-white shadow-lg rounded-lg py-1 z-10">
+            <a href="#" class="dropdown-link block px-4 py-2 text-gray-700 hover:bg-gray-100" data-page="settings">Settings</a>
+            <a href="#" id="logout-btn" class="block px-4 py-2 text-gray-700 hover:bg-gray-100">Logout</a>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div id="page-content" class="p-6">
+      <div class="text-center py-8">
+        <i class="fas fa-spinner fa-spin text-2xl text-blue-600"></i>
+        <p class="mt-2">Loading dashboard...</p>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Mobile Bottom Nav -->
+<nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white shadow-lg flex justify-around py-3">
+  <a href="#" data-page="today" class="bottom-nav text-blue-600 flex flex-col items-center">
+    <i class="fas fa-calendar-day"></i><span class="text-xs mt-1">Today</span>
+  </a>
+  <a href="#" data-page="week" class="bottom-nav text-gray-600 flex flex-col items-center">
+    <i class="fas fa-calendar-week"></i><span class="text-xs mt-1">Week</span>
+  </a>
+  <a href="#" data-page="notifications" class="bottom-nav text-gray-600 flex flex-col items-center">
+    <i class="fas fa-bell"></i><span class="text-xs mt-1">Alerts</span>
+  </a>
+  <a href="#" data-page="settings" class="bottom-nav text-gray-600 flex flex-col items-center">
+    <i class="fas fa-cog"></i><span class="text-xs mt-1">Settings</span>
+  </a>
+</nav>
+
+<!-- Firebase modular SDK + app logic -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+  import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
+  import { getFirestore, doc, getDoc, setDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
+  import { getStorage, ref as storageRefFn, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-storage.js";
+
+
+  // Assuming you have PDF.js loaded from a CDN
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
+
+
+  // ---------- CONFIG: replace these with your real keys ----------
+  const firebaseConfig = {
+    apiKey: "AIzaSyCU2xz-keuLS6SSMNraYe7bC59iQu-Y4b4",
+    authDomain: "assignment-3-d46ca.firebaseapp.com",
+    projectId: "assignment-3-d46ca",
+    storageBucket: "assignment-3-d46ca.appspot.com", // NOTE: use .appspot.com
+    messagingSenderId: "840587574527",
+    appId: "1:840587574527:web:ecdaa3a39b7645dc42e0ca"
+  };
+  // ----------------------------------------------------------------
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const storage = getStorage(app);
+
+  // DOM refs
+  const addTimetableModal = document.getElementById('addTimetableModal');
+  const closeModal = document.getElementById('closeModal');
+  const uploadTimetableBtn = document.getElementById('uploadTimetable');
+  const clearInputsBtn = document.getElementById('clearInputs');
+  const timetableFileInput = document.getElementById('timetableFile');
+  const manualTimetableInput = document.getElementById('manualTimetable');
+  const openUploadBtn = document.getElementById('open-upload');
+  const deleteSidebarBtn = document.getElementById('delete-timetable-sidebar');
+
+  const sidebar = document.getElementById('sidebar');
+  const sidebarToggle = document.getElementById('sidebar-toggle');
+  const profileImg = document.getElementById('profile-img');
+  const profileDropdown = document.getElementById('profile-dropdown');
+  const logoutBtn = document.getElementById('logout-btn');
+  const syncBtn = document.getElementById('sync-btn');
+  const pageTitle = document.getElementById('page-title');
+  const pageContent = document.getElementById('page-content');
+
+  // app state
+  let currentDate = new Date();
+  let currentUser = null;
+
+  // helper utilities
+  function formatDateHuman(d){ return d.toLocaleDateString(undefined, { weekday:'long', month:'long', day:'numeric', year:'numeric' }); }
+  function getWeekRange(date){ const start = new Date(date); start.setDate(date.getDate() - date.getDay()); const end = new Date(start); end.setDate(start.getDate() + 6); return `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`; }
+  function getDayName(date){ return date.toLocaleDateString('en-US', { weekday:'long' }); }
+  function generateTimeSlots(){ const slots=[]; for(let h=8;h<=20;h++){ const hh=String(h).padStart(2,'0'); slots.push(`${hh}:00`); if(h<20) slots.push(`${hh}:30`); } return slots; }
+  function colorClass(c){ const map={blue:'border-l-blue-500',red:'border-l-red-500',green:'border-l-green-500',yellow:'border-l-yellow-500',purple:'border-l-purple-500',indigo:'border-l-indigo-500',pink:'border-l-pink-500',gray:'border-l-gray-500',slate:'border-l-slate-500'}; return map[(c||'').toLowerCase()] || 'border-l-gray-300'; }
+  function normalizeDayName(s){ if(!s) return ''; const v=String(s).toLowerCase(); const days=['sunday','monday','tuesday','wednesday','thursday','friday','saturday']; const hit=days.find(d => v.startsWith(d)); return hit ? hit.charAt(0).toUpperCase()+hit.slice(1) : String(s); }
+
+  // ---------- file processors (return {type:'structured', lectures:[...]}) ----------
+  async function processExcelFile(file){
+    return new Promise((resolve,reject)=>{
+      const reader=new FileReader();
+      reader.onload = e => {
+        try {
+          const wb = XLSX.read(new Uint8Array(e.target.result), { type:'array' });
+          const sheet = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(sheet);
+          const lectures = rows.map(r => {
+            const day = r['Day'] ?? r['day'];
+            const time = r['Time'] ?? r['time'];
+            const course = r['Course'] ?? r['Subject'] ?? r['course'] ?? r['subject'];
+            const room = r['Room'] ?? r['Location'] ?? r['room'] ?? r['location'];
+            const color = r['Color'] ?? r['color'];
+            if(!day || !time || !course) return null;
+            return { course: String(course), day: normalizeDayName(day), time: String(time).trim(), ...(room?{room:String(room)}:{}), ...(color?{color:String(color).toLowerCase()}: {}) };
+          }).filter(Boolean);
+          resolve({ type:'structured', lectures });
+        } catch(err){ reject(err); }
+      };
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
     });
+  }
 
-    // Profile Dropdown Toggle
-    profileImg.addEventListener('click', e => {
-      e.stopPropagation();
-      profileDropdown.classList.toggle('hidden');
+  async function processPDFFile(file){
+    return new Promise((resolve,reject)=>{
+      const reader = new FileReader();
+      reader.onload = async e => {
+        try {
+          const typed = new Uint8Array(e.target.result);
+          const pdf = await pdfjsLib.getDocument(typed).promise;
+          let raw = '';
+          const pages = Math.min(pdf.numPages, 3);
+          for(let p=1;p<=pages;p++){
+            const page = await pdf.getPage(p);
+            const tc = await page.getTextContent();
+            raw += ' ' + tc.items.map(i=>i.str).join(' ');
+          }
+          const tokens = raw.replace(/\s+/g,' ').trim().split(' ');
+          const days = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
+          const lectures = [];
+          for(let i=0;i<tokens.length-3;i++){
+            const d = tokens[i].toLowerCase();
+            const t = tokens[i+1];
+            if(days.includes(d) && /^\d{1,2}:\d{2}$/.test(t)){
+              const day = normalizeDayName(tokens[i]);
+              const time = t.length===4 ? '0'+t : t;
+              const course = tokens[i+2];
+              if(!course) continue;
+              const room = tokens[i+3] && !/^\d{1,2}:\d{2}$/.test(tokens[i+3]) ? tokens[i+3] : undefined;
+              lectures.push({ course: String(course), day, time, ...(room?{room:String(room)}:{}) });
+            }
+          }
+          resolve({ type:'structured', lectures });
+        } catch(err){ reject(err); }
+      };
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
     });
-    document.addEventListener('click', () => {
-      if (!profileDropdown.classList.contains('hidden')) {
-        profileDropdown.classList.add('hidden');
-      }
-    });
+  }
 
-    // Logout Button
-    logoutBtn.addEventListener('click', () => {
-      auth.signOut().then(() => {
-        window.location.href = `${window.location.origin}/index.html`;
-      }).catch(() => alert("Logout failed. Try again."));
-    });
-
-    // Sync Button
-    syncBtn.addEventListener('click', () => {
-      syncBtn.classList.add('animate-spin');
-      setTimeout(() => {
-        syncBtn.classList.remove('animate-spin');
-        if (auth.currentUser) loadTimetable(auth.currentUser.uid);
-      }, 1000);
-    });
-
-    // Date Navigation
-    prevDayBtn.addEventListener('click', () => {
-      currentDate.setDate(currentDate.getDate() - 1);
-      updateDateDisplay();
-      if (auth.currentUser) loadTimetable(auth.currentUser.uid); // Optional: re-render
-    });
-    nextDayBtn.addEventListener('click', () => {
-      currentDate.setDate(currentDate.getDate() + 1);
-      updateDateDisplay();
-      if (auth.currentUser) loadTimetable(auth.currentUser.uid);
-    });
-
-    // -----------------------------
-    // ✅ NEW: Sidebar & Bottom Nav Click Handlers
-    // -----------------------------
-
-    // Simulate navigation (you can change hrefs to real pages later)
-    const navLinks = document.querySelectorAll('a[href="#"]');
-    navLinks.forEach(link => {
-      if (!link.id) { // Avoid interfering with logout-btn
-        link.addEventListener('click', e => {
-          e.preventDefault();
-
-          // Remove active class from all
-          navLinks.forEach(l => {
-            const parent = l.parentElement?.tagName === 'NAV' ? l.parentElement : l;
-            parent.classList.remove('bg-blue-50', 'text-blue-600');
-            parent.classList.add('text-gray-600');
+  async function processCSVFile(file){
+    return new Promise((resolve,reject)=>{
+      const reader=new FileReader();
+      reader.onload = e => {
+        try {
+          const raw = e.target.result;
+          const lines = raw.split('\n').map(l=>l.trim()).filter(Boolean);
+          if(!lines.length) return resolve({ type:'structured', lectures:[] });
+          const headers = lines[0].split(',').map(h=>h.trim().toLowerCase());
+          const rows = lines.slice(1).map(line=>{
+            const vals = line.split(',');
+            const obj = {};
+            headers.forEach((h,idx)=> obj[h] = (vals[idx]||'').trim());
+            return obj;
           });
-          // Add active class to clicked
-          const parent = link.parentElement?.tagName === 'NAV' ? link.parentElement : link;
-          parent.classList.add('bg-blue-50', 'text-blue-600');
-          parent.classList.remove('text-gray-600');
-
-          // Optional: Update title
-          const title = link.textContent.trim();
-          if (title === 'Today\'s Schedule' || title === 'Weekly View') {
-            document.querySelector('main h1').textContent = title;
-          }
-
-          // Temporary message for demo
-          if (title === 'Settings') {
-            alert("Settings page coming soon!");
-          } else if (title === 'Notifications') {
-            alert("You have no new notifications.");
-          }
-        });
-      }
+          const lectures = rows.map(r => {
+            const day = r['day'];
+            const time = r['time'];
+            const course = r['course'] || r['subject'] || r['class'];
+            const room = r['room'] || r['location'];
+            const color = r['color'];
+            if(!day || !time || !course) return null;
+            return { course: String(course), day: normalizeDayName(day), time: String(time).trim(), ...(room?{room:String(room)}:{}), ...(color?{color:String(color).toLowerCase()}: {}) };
+          }).filter(Boolean);
+          resolve({ type:'structured', lectures });
+        } catch(err){ reject(err); }
+      };
+      reader.onerror = reject;
+      reader.readAsText(file);
     });
+  }
 
-    // ✅ Mobile Bottom Nav - Sync with Sidebar
-    const bottomNavItems = document.querySelectorAll('.md\\:hidden a');
-    bottomNavItems.forEach(item => {
-      item.addEventListener('click', e => {
-        e.preventDefault();
-        const text = item.querySelector('span')?.textContent;
-
-        // Highlight matching sidebar item
-        document.querySelectorAll('nav.p-4 a').forEach(link => {
-          if (link.textContent.includes(text)) {
-            // Simulate click
-            link.click();
+  async function processJSONFile(file){
+    return new Promise((resolve,reject)=>{
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const data = JSON.parse(e.target.result);
+          let lectures = [];
+          if(Array.isArray(data.lectures)) {
+            lectures = data.lectures.map(l => {
+              if(!l.day || !l.time || !l.course) return null;
+              return { course: String(l.course), day: normalizeDayName(l.day), time: String(l.time).trim(), ...(l.room?{room:String(l.room)}:{}), ...(l.color?{color:String(l.color).toLowerCase()}: {}) };
+            }).filter(Boolean);
+          } else if(Array.isArray(data.timetable)) {
+            lectures = data.timetable.map(l => { if(!l.day||!l.time||!l.course) return null; return { course: String(l.course), day: normalizeDayName(l.day), time: String(l.time).trim() }; }).filter(Boolean);
+          } else if(Array.isArray(data.TimeTable)) {
+            lectures = data.TimeTable.map(l => { if(!l.day||!l.time||!l.course) return null; return { course: String(l.course), day: normalizeDayName(l.day), time: String(l.time).trim() }; }).filter(Boolean);
           }
-        });
-
-        // Visual feedback
-        bottomNavItems.forEach(i => i.classList.remove('text-blue-600'));
-        bottomNavItems.forEach(i => i.classList.add('text-gray-600'));
-        item.classList.remove('text-gray-600');
-        item.classList.add('text-blue-600');
-      });
+          resolve({ type:'structured', lectures });
+        } catch(err){ reject(err); }
+      };
+      reader.onerror = reject;
+      reader.readAsText(file);
     });
+  }
 
-    // ✅ "Add Timetable" Button in Empty State
-    document.addEventListener('click', e => {
-      if (e.target.id === 'add-timetable') {
-        e.preventDefault();
-        alert("Redirecting to timetable editor...");
-        // Replace with real action:
-        // window.location.href = "edit-timetable.html";
-      }
-      if (e.target.id === 'retry-load') {
-        e.preventDefault();
-        if (auth.currentUser) {
-          loadTimetable(auth.currentUser.uid);
+  async function processManualInput(text){
+    const data = JSON.parse(text);
+    let lectures = [];
+    if(Array.isArray(data.lectures)){
+      lectures = data.lectures.map(l => {
+        if(!l.day||!l.time||!l.course) return null;
+        return { course: String(l.course), day: normalizeDayName(l.day), time: String(l.time).trim(), ...(l.room?{room:String(l.room)}:{}), ...(l.color?{color:String(l.color).toLowerCase()}: {}) };
+      }).filter(Boolean);
+    }
+    return { type:'structured', lectures };
+  }
+
+  // ---------- Firestore helpers ----------
+  async function getUserDoc(uid){
+    const d = await getDoc(doc(db, 'timetables', uid));
+    return d.exists() ? d.data() : null;
+  }
+  async function saveUserDoc(uid, payload){
+    // add updatedAt timestamp
+    return setDoc(doc(db, 'timetables', uid), { ...payload, updatedAt: serverTimestamp() });
+  }
+  async function removeUserDoc(uid){
+    return deleteDoc(doc(db, 'timetables', uid));
+  }
+
+  // ---------- rendering helpers ----------
+  function renderLecturesList(container, lectures, dayName){
+    const todays = lectures.filter(l => (l.day||'').toLowerCase() === dayName.toLowerCase());
+    if(!todays.length){
+      container.innerHTML = `
+        <div class="p-6 text-center text-gray-500">
+          <i class="fas fa-calendar-day text-2xl mb-2"></i>
+          <p>No lectures for this day</p>
+          <button id="open-add-modal-today" class="mt-4 text-blue-600 hover:underline">Upload or paste timetable</button>
+        </div>
+      `;
+      document.getElementById('open-add-modal-today')?.addEventListener('click', () => addTimetableModal.classList.add('active'));
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="grid grid-cols-1 gap-2 p-4">
+        ${todays.map(lec => `
+          <div class="lecture-card bg-white p-4 rounded-lg shadow-sm ${colorClass(lec.color)}">
+            <h4 class="font-medium">${lec.course}</h4>
+            <p class="text-sm text-gray-600">${lec.time}${lec.day ? ` • ${lec.day}` : ''}</p>
+            ${lec.room ? `<p class="text-sm text-gray-500 mt-1"><i class="fas fa-map-marker-alt mr-1"></i>${lec.room}</p>` : ''}
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  // ---------- pages ----------
+  async function loadToday(uid){
+    pageContent.innerHTML = `
+      <div class="flex justify-between items-center mb-6">
+        <button id="prev-day" class="p-2 rounded-lg hover:bg-gray-100"><i class="fas fa-chevron-left"></i></button>
+        <h2 class="text-xl font-semibold">${formatDateHuman(currentDate)}</h2>
+        <button id="next-day" class="p-2 rounded-lg hover:bg-gray-100"><i class="fas fa-chevron-right"></i></button>
+      </div>
+
+      <div id="timetable" class="bg-white rounded-lg shadow-sm overflow-hidden">
+        <div class="grid grid-cols-1 gap-2 p-4">
+          <div class="text-center py-8 text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i> Loading timetable...</div>
+        </div>
+      </div>
+
+      <div class="mt-8">
+        <h3 class="text-lg font-semibold mb-4 flex items-center">
+          <i class="fas fa-clock text-blue-600 mr-2"></i>Upcoming Lectures (next 24 hours)
+        </h3>
+        <div id="upcoming-lectures" class="space-y-3">
+          <div class="text-center py-4 text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i> Loading lectures...</div>
+        </div>
+      </div>
+    `;
+
+    const timetableEl = document.getElementById('timetable');
+    const upcomingEl = document.getElementById('upcoming-lectures');
+
+    try {
+      const data = await getUserDoc(uid);
+
+      if(!data){
+        timetableEl.innerHTML = `
+          <div class="p-6 text-center text-gray-500">
+            <i class="fas fa-calendar-plus text-2xl mb-2"></i>
+            <p>No timetable uploaded</p>
+            <button id="open-add-modal-today" class="mt-4 text-blue-600 hover:underline">Add timetable</button>
+          </div>
+        `;
+        document.getElementById('open-add-modal-today')?.addEventListener('click', () => addTimetableModal.classList.add('active'));
+        upcomingEl.innerHTML = `<div class="text-center py-4 text-gray-500">No data</div>`;
+      } else if(data.type === 'image' && data.url){
+        timetableEl.innerHTML = `
+          <div class="p-4">
+            <div class="rounded-lg overflow-hidden border">
+              <img src="${data.url}" alt="Uploaded Timetable" class="w-full">
+            </div>
+            <p class="text-xs text-gray-500 mt-2">Image timetable (uploaded)</p>
+          </div>
+        `;
+        upcomingEl.innerHTML = `<div class="text-center py-4 text-gray-500">Upcoming list unavailable for image-only timetable</div>`;
+      } else if(data.type === 'structured' && Array.isArray(data.lectures)){
+        const dayName = currentDate.toLocaleDateString('en-US', { weekday: 'long' });
+        renderLecturesList(timetableEl, data.lectures, dayName);
+
+        // upcoming in next 24h from structured data only
+        const now = new Date();
+        const end = new Date(now.getTime() + 24*60*60*1000);
+        const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+        const sow = new Date(currentDate); sow.setDate(currentDate.getDate() - currentDate.getDay());
+
+        const upcoming = data.lectures.filter(lec => {
+          if(!lec.day || !lec.time) return false;
+          const dayIdx = days.findIndex(d => d.toLowerCase() === String(lec.day).toLowerCase());
+          if(dayIdx < 0) return false;
+          const parts = String(lec.time).split(':');
+          const hh = parseInt(parts[0],10), mm = parseInt(parts[1]||'0',10);
+          if(isNaN(hh)) return false;
+          const dt = new Date(sow);
+          dt.setDate(sow.getDate() + dayIdx);
+          dt.setHours(hh, mm, 0, 0);
+          return dt >= now && dt <= end;
+        }).sort((a,b)=> String(a.time).localeCompare(String(b.time)));
+
+        if(!upcoming.length){
+          upcomingEl.innerHTML = `<div class="text-center py-4 text-gray-500">No upcoming lectures in the next 24 hours</div>`;
+        } else {
+          const nowMs = Date.now();
+          upcomingEl.innerHTML = upcoming.map(lec => {
+            const parts = String(lec.time).split(':');
+            const hh = parseInt(parts[0],10), mm = parseInt(parts[1]||'0',10);
+            const dayIdx = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+              .findIndex(d => d.toLowerCase() === String(lec.day).toLowerCase());
+            const sow2 = new Date(currentDate); sow2.setDate(currentDate.getDate() - currentDate.getDay());
+            const dt = new Date(sow2); dt.setDate(sow2.getDate() + dayIdx); dt.setHours(hh, mm||0, 0, 0);
+            const mins = Math.max(0, Math.round((dt.getTime() - nowMs) / 60000));
+            const soon = mins <= 60;
+
+            return `
+              <div class="lecture-card bg-white p-4 rounded-lg shadow-sm ${soon ? 'border-l-yellow-500' : colorClass(lec.color)}">
+                <div class="flex justify-between items-start">
+                  <div>
+                    <h4 class="font-medium">${lec.course}</h4>
+                    <p class="text-sm text-gray-600">${lec.day} ${lec.time} ${soon ? '<span class="text-yellow-600">(starting soon)</span>' : ''}</p>
+                    ${lec.room ? `<p class="text-sm text-gray-500 mt-1"><i class="fas fa-map-marker-alt mr-1"></i>${lec.room}</p>` : ''}
+                    ${soon ? `<p class="text-xs text-yellow-600 mt-1"><i class="fas fa-exclamation-circle mr-1"></i>Starts in ${mins} minutes</p>` : ''}
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('');
         }
+      } else {
+        timetableEl.innerHTML = `<div class="p-6 text-center text-gray-500">Unsupported timetable format</div>`;
+        upcomingEl.innerHTML = `<div class="text-center py-4 text-gray-500">No data</div>`;
+      }
+
+      // date nav wiring
+      document.getElementById('prev-day').addEventListener('click', () => { currentDate.setDate(currentDate.getDate()-1); renderPage('today', uid); });
+      document.getElementById('next-day').addEventListener('click', () => { currentDate.setDate(currentDate.getDate()+1); renderPage('today', uid); });
+
+    } catch(err) {
+      console.error(err);
+      timetableEl.innerHTML = `
+        <div class="p-4 text-center text-red-500">
+          <i class="fas fa-exclamation-triangle mr-2"></i> Error loading timetable
+          <button id="retry-load" class="mt-2 text-blue-600 hover:underline">Retry</button>
+        </div>
+      `;
+      document.getElementById('retry-load')?.addEventListener('click', () => loadToday(uid));
+    }
+  }
+
+  async function loadWeek(uid){
+    pageContent.innerHTML = `
+      <div class="flex justify-between items-center mb-6">
+        <button id="prev-week" class="p-2 rounded-lg hover:bg-gray-100"><i class="fas fa-chevron-left"></i> Previous Week</button>
+        <h2 class="text-xl font-semibold">Week of ${getWeekRange(currentDate)}</h2>
+        <button id="next-week" class="p-2 rounded-lg hover:bg-gray-100">Next Week <i class="fas fa-chevron-right"></i></button>
+      </div>
+
+      <div id="weekly-timetable" class="bg-white rounded-lg shadow-sm overflow-hidden">
+        <div class="text-center py-8 text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i> Loading weekly timetable...</div>
+      </div>
+    `;
+
+    const weeklyEl = document.getElementById('weekly-timetable');
+
+    try {
+      const data = await getUserDoc(uid);
+      if(!data){
+        weeklyEl.innerHTML = `
+          <div class="p-6 text-center text-gray-500">
+            <i class="fas fa-calendar-plus text-2xl mb-2"></i>
+            <p>No timetable uploaded</p>
+            <button id="open-add-modal-week" class="mt-4 text-blue-600 hover:underline">Add timetable</button>
+          </div>
+        `;
+        document.getElementById('open-add-modal-week')?.addEventListener('click', () => addTimetableModal.classList.add('active'));
+        return;
+      }
+
+      if(data.type === 'image' && data.url){
+        weeklyEl.innerHTML = `
+          <div class="p-4">
+            <div class="rounded-lg overflow-hidden border">
+              <img src="${data.url}" alt="Uploaded Timetable" class="w-full">
+            </div>
+            <p class="text-xs text-gray-500 mt-2">Image timetable</p>
+          </div>
+        `;
+        document.getElementById('prev-week').addEventListener('click', () => { currentDate.setDate(currentDate.getDate()-7); renderPage('week', uid); });
+        document.getElementById('next-week').addEventListener('click', () => { currentDate.setDate(currentDate.getDate()+7); renderPage('week', uid); });
+        return;
+      }
+
+      if(data.type === 'structured' && Array.isArray(data.lectures) && data.lectures.length){
+        const lectures = data.lectures;
+        const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+        const map = {};
+        days.forEach(d => map[d] = lectures.filter(l => (l.day||'').toLowerCase() === d.toLowerCase()));
+
+        const startOfWeek = new Date(currentDate);
+        startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
+
+        weeklyEl.innerHTML = `
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr>
+                  <th class="p-3 text-left bg-gray-50 sticky-time">Time</th>
+                  ${days.map((d,idx)=>{
+                    const dayDate = new Date(startOfWeek); dayDate.setDate(startOfWeek.getDate() + idx);
+                    const isToday = dayDate.toDateString() === new Date().toDateString();
+                    return `<th class="p-3 text-center bg-gray-50 min-w-[120px] ${isToday ? 'bg-blue-50' : ''}">${getDayName(dayDate)} ${isToday ? '<span class="block text-xs text-blue-600">Today</span>' : ''}</th>`;
+                  }).join('')}
+                </tr>
+              </thead>
+              <tbody>
+                ${generateTimeSlots().map(slot => `
+                  <tr class="border-t">
+                    <td class="p-3 text-sm text-gray-500 bg-gray-50 sticky-time">${slot}</td>
+                    ${days.map(d => {
+                      const matches = map[d].filter(l => String(l.time||'').trim() === slot);
+                      return `<td class="p-1 border-l">${matches.map(lec => `<div class="lecture-card bg-white p-2 rounded shadow-xs ${colorClass(lec.color)} mb-1 compact-lecture"><h4 class="font-medium text-sm truncate">${lec.course}</h4>${lec.room ? `<p class="text-xs text-gray-600 truncate">${lec.room}</p>` : ''}</div>`).join('')}</td>`;
+                    }).join('')}
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+      } else {
+        weeklyEl.innerHTML = `
+          <div class="p-6 text-center text-gray-500">
+            <p>No structured timetable to render</p>
+          </div>
+        `;
+      }
+
+      document.getElementById('prev-week').addEventListener('click', () => { currentDate.setDate(currentDate.getDate()-7); renderPage('week', uid); });
+      document.getElementById('next-week').addEventListener('click', () => { currentDate.setDate(currentDate.getDate()+7); renderPage('week', uid); });
+
+    } catch(err){
+      console.error(err);
+      weeklyEl.innerHTML = `
+        <div class="p-4 text-center text-red-500">
+          <i class="fas fa-exclamation-triangle mr-2"></i> Error loading weekly timetable
+          <button id="retry-weekly-load" class="mt-2 text-blue-600 hover:underline">Retry</button>
+        </div>
+      `;
+      document.getElementById('retry-weekly-load')?.addEventListener('click', () => loadWeek(uid));
+    }
+  }
+
+  function loadNotifications(){
+    pageContent.innerHTML = `
+      <div class="bg-white rounded-lg shadow-sm p-6">
+        <h2 class="text-xl font-semibold mb-4">Notifications</h2>
+        <p class="text-gray-600">No new notifications.</p>
+      </div>
+    `;
+  }
+
+  async function loadSettings(uid){
+    pageContent.innerHTML = `
+      <div class="bg-white rounded-lg shadow-sm p-6 space-y-6">
+        <h2 class="text-xl font-semibold">Settings</h2>
+
+        <div id="timetable-status" class="p-4 border rounded bg-gray-50 text-sm text-gray-700">
+          <i class="fas fa-spinner fa-spin mr-2"></i> Checking timetable...
+        </div>
+
+        <div class="space-y-4">
+          <div class="flex flex-col sm:flex-row gap-3">
+            <button id="open-add-modal-settings" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Add or Replace Timetable</button>
+            <button id="remove-timetable" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">Remove Timetable</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    try {
+      const data = await getUserDoc(uid);
+      const statusEl = document.getElementById('timetable-status');
+      if(!data){
+        statusEl.innerHTML = `<p><i class="fas fa-circle-xmark text-red-500 mr-2"></i>No timetable uploaded</p>`;
+      } else if(data.type === 'image'){
+        statusEl.innerHTML = `<p class="mb-2"><i class="fas fa-image text-blue-600 mr-2"></i>Image timetable uploaded</p><a href="${data.url}" target="_blank" class="text-blue-600 underline break-all">View image</a>`;
+      } else if(data.type === 'structured'){
+        const n = Array.isArray(data.lectures) ? data.lectures.length : 0;
+        statusEl.innerHTML = `<p class="mb-2"><i class="fas fa-circle-check text-green-600 mr-2"></i>Structured timetable uploaded</p><p>Total lectures: <span class="font-medium">${n}</span></p>`;
+      } else {
+        statusEl.innerHTML = `<p class="text-amber-600"><i class="fas fa-circle-exclamation mr-2"></i>Unknown format</p>`;
+      }
+    } catch(e){
+      document.getElementById('timetable-status').innerHTML = `<p class="text-red-600"><i class="fas fa-exclamation-triangle mr-2"></i>Error reading timetable</p>`;
+    }
+
+    document.getElementById('open-add-modal-settings')?.addEventListener('click', () => addTimetableModal.classList.add('active'));
+    document.getElementById('remove-timetable')?.addEventListener('click', async () => {
+      if(!confirm('Remove timetable for this account?')) return;
+      try{
+        // if previous payload had storagePath, delete storage object
+        const prev = await getUserDoc(uid);
+        if(prev && prev.type === 'image' && prev.storagePath){
+          try { await deleteObject(storageRefFn(storage, prev.storagePath)); } catch(e){ console.warn('failed to remove storage object', e); }
+        }
+        await removeUserDoc(uid);
+        alert('Timetable removed');
+        renderPage('settings', uid);
+      } catch(err){
+        console.error(err);
+        alert('Failed to remove timetable');
       }
     });
   }
 
-  // ... [rest of your functions: initApp, renderEmptyState, etc.] ...
-</script>
+  // Page router
+  function renderPage(page, uid){
+    const titles = { today:"Today's Schedule", week:"Weekly View", notifications:"Notifications", settings:"Settings" };
+    pageTitle.textContent = titles[page] || '';
+    document.querySelectorAll('.nav-link').forEach(link => { link.classList.remove('bg-blue-50','text-blue-600'); if(link.dataset.page === page) link.classList.add('bg-blue-50','text-blue-600'); });
+    document.querySelectorAll('.bottom-nav').forEach(nav => { nav.classList.remove('text-blue-600'); if(nav.dataset.page === page) nav.classList.add('text-blue-600'); });
 
+    if(page === 'today') loadToday(uid);
+    else if(page === 'week') loadWeek(uid);
+    else if(page === 'notifications') loadNotifications();
+    else if(page === 'settings') loadSettings(uid);
+  }
+
+  function setupNavigation(uid){
+    document.querySelectorAll('.nav-link').forEach(link=>{ link.addEventListener('click', e=>{ e.preventDefault(); renderPage(link.dataset.page, uid); }); });
+    document.querySelectorAll('.bottom-nav').forEach(nav=>{ nav.addEventListener('click', e=>{ e.preventDefault(); renderPage(nav.dataset.page, uid); }); });
+    document.querySelectorAll('.dropdown-link').forEach(a=>{ a.addEventListener('click', e=>{ e.preventDefault(); renderPage(a.dataset.page, uid); profileDropdown.classList.add('hidden'); }); });
+  }
+
+  // ---------- UI wiring and upload logic ----------
+  function setupUI(user){
+    currentUser = user;
+
+    // avatar
+    if(user.photoURL) profileImg.src = user.photoURL;
+    else {
+      const name = user.displayName || (user.email ? user.email.split('@')[0] : 'User');
+      profileImg.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`;
+    }
+
+    // sidebar toggle
+    sidebarToggle.addEventListener('click', () => sidebar.classList.toggle('-translate-x-full'));
+
+    // profile dropdown
+    profileImg.addEventListener('click', e => { e.stopPropagation(); profileDropdown.classList.toggle('hidden'); });
+    document.addEventListener('click', e => { if(!profileDropdown.contains(e.target) && e.target !== profileImg) profileDropdown.classList.add('hidden'); });
+
+    // logout (redirect)
+    logoutBtn.addEventListener('click', () => {
+      auth.signOut().then(()=> window.location.href = '/index.html').catch(err => { console.error('Logout error', err); alert('Logout failed'); });
+    });
+
+    // sync
+    syncBtn.addEventListener('click', () => {
+      syncBtn.classList.add('animate-spin');
+      setTimeout(()=> { syncBtn.classList.remove('animate-spin'); if(currentUser) renderPage('today', currentUser.uid); }, 600);
+    });
+
+    // modal open/close
+    openUploadBtn.addEventListener('click', () => addTimetableModal.classList.add('active'));
+    closeModal.addEventListener('click', () => addTimetableModal.classList.remove('active'));
+    addTimetableModal.addEventListener('click', e => { if(e.target === addTimetableModal) addTimetableModal.classList.remove('active'); });
+
+    clearInputsBtn.addEventListener('click', ()=> { timetableFileInput.value = ''; manualTimetableInput.value = ''; });
+
+    // sidebar delete
+    deleteSidebarBtn.addEventListener('click', () => deleteTimetable());
+
+    // upload logic
+    uploadTimetableBtn.addEventListener('click', async () => {
+      const file = timetableFileInput.files[0];
+      const manual = manualTimetableInput.value.trim();
+      uploadTimetableBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Uploading...';
+      uploadTimetableBtn.disabled = true;
+
+      try {
+        if(!currentUser) throw new Error('Not authenticated');
+
+        const uid = currentUser.uid;
+        const prev = await getUserDoc(uid);
+
+        let payload = null;
+
+        if(file){
+          const ext = (file.name.split('.').pop() || '').toLowerCase();
+
+          // images
+          if(['jpg','jpeg','png'].includes(ext)){
+            // upload new image
+            const path = `timetables/${uid}/${Date.now()}_${file.name}`;
+            const ref = storageRefFn(storage, path);
+            await uploadBytes(ref, file);
+            const url = await getDownloadURL(ref);
+            payload = { type:'image', url, storagePath: ref.fullPath, uploadedAt: serverTimestamp() };
+
+            // delete previous storage object if present and different
+            if(prev && prev.type === 'image' && prev.storagePath && prev.storagePath !== ref.fullPath){
+              try { await deleteObject(storageRefFn(storage, prev.storagePath)); } catch(e){ console.warn('failed deleting previous storage object', e); }
+            }
+          }
+          // excel
+          else if(ext === 'xlsx' || ext === 'xls'){
+            payload = await processExcelFile(file);
+          }
+          // pdf
+          else if(ext === 'pdf'){
+            payload = await processPDFFile(file);
+          }
+          // csv
+          else if(ext === 'csv'){
+            payload = await processCSVFile(file);
+          }
+          // json
+          else if(ext === 'json'){
+            payload = await processJSONFile(file);
+          } else {
+            throw new Error('Unsupported file type');
+          }
+        } else if(manual){
+          payload = await processManualInput(manual);
+        } else {
+          throw new Error('Choose a file or paste JSON');
+        }
+
+        // Validate structured payload
+        if(payload && payload.type === 'structured' && !Array.isArray(payload.lectures)){
+          throw new Error('Parsed structured timetable missing lectures array');
+        }
+
+        // If switching from image -> structured, delete previous storage object
+        if(prev && prev.type === 'image' && prev.storagePath && payload && payload.type !== 'image'){
+          try { await deleteObject(storageRefFn(storage, prev.storagePath)); } catch(e){ console.warn('failed deleting previous storage object', e); }
+        }
+
+        await saveUserDoc(uid, payload);
+
+        // cleanup UI
+        timetableFileInput.value = '';
+        manualTimetableInput.value = '';
+        addTimetableModal.classList.remove('active');
+        alert('Uploaded');
+        renderPage('today', uid);
+      } catch(err) {
+        console.error('Upload error:', err);
+        alert('Failed to upload: ' + (err.message || err));
+      } finally {
+        uploadTimetableBtn.innerHTML = 'Upload';
+        uploadTimetableBtn.disabled = false;
+      }
+    });
+  }
+
+  // delete timetable (public sidebar button)
+  async function deleteTimetable(){
+    if(!currentUser) { alert('Not signed in'); return; }
+    if(!confirm('Delete timetable for this account? This cannot be undone.')) return;
+    try {
+      const uid = currentUser.uid;
+      const prev = await getUserDoc(uid);
+      if(prev && prev.type === 'image' && prev.storagePath){
+        try { await deleteObject(storageRefFn(storage, prev.storagePath)); } catch(e){ console.warn('failed to remove storage object', e); }
+      }
+      await removeUserDoc(uid);
+      alert('Timetable deleted');
+      renderPage('today', uid);
+    } catch(e){
+      console.error(e);
+      alert('Failed to delete timetable');
+    }
+  }
+
+  // ---------- auth + init ----------
+  function bindGlobalNavigation(uid){
+    setupNavigation(uid);
+  }
+
+  onAuthStateChanged(auth, user => {
+    if(user){
+      setupUI(user);
+      bindGlobalNavigation(user.uid);
+      renderPage('today', user.uid);
+    } else {
+      // If you want to allow local dev without auth, uncomment anonymous sign-in:
+      // import("https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js").then(({getAuth, signInAnonymously}) => signInAnonymously(getAuth()));
+      // For production redirect to login
+      window.location.href = '/login.html';
+    }
+  });
+
+</script>
 </body>
 </html>
